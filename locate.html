@@ -79,7 +79,6 @@
     letter-spacing: -0.01em;
   }
 
-  /* ---- Generator view ---- */
   #qr-wrap {
     background: #fff;
     padding: 16px;
@@ -107,8 +106,15 @@
     margin: 0;
   }
   .hint b { color: var(--amber); font-weight: 600; }
+  ul.hint-list {
+    margin: 0 0 20px;
+    padding-left: 18px;
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.7;
+  }
+  ul.hint-list b { color: var(--amber); font-weight: 600; }
 
-  /* ---- Capture view ---- */
   .radar {
     width: 120px; height: 120px;
     margin: 6px auto 20px;
@@ -144,7 +150,7 @@
   }
   .coords {
     font-family: var(--mono);
-    font-size: 26px;
+    font-size: 22px;
     text-align: center;
     color: var(--signal);
     margin: 6px 0 18px;
@@ -162,12 +168,14 @@
     border-radius: 3px;
     padding: 10px 12px;
   }
+  .meta.full { grid-column: 1 / -1; }
   .meta .k { font-family: var(--mono); font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; }
-  .meta .v { font-family: var(--mono); font-size: 14px; color: var(--text); margin-top: 3px; }
+  .meta .v { font-family: var(--mono); font-size: 14px; color: var(--text); margin-top: 3px; word-break: break-word; }
 
   .actions { display: flex; flex-direction: column; gap: 10px; }
   .btn {
     display: block;
+    width: 100%;
     text-align: center;
     font-family: var(--sans);
     font-size: 14px;
@@ -184,6 +192,9 @@
   .btn:hover { background: rgba(57,255,154,0.08); }
   .btn.primary { background: var(--signal); color: #06120c; }
   .btn.primary:hover { background: #4dffab; }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn:disabled:hover { background: transparent; }
+  .btn.primary:disabled:hover { background: var(--signal); }
 
   .error {
     background: rgba(255,92,92,0.08);
@@ -201,6 +212,68 @@
     text-align: center;
     font-family: var(--mono);
   }
+
+  label.field-label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 6px;
+  }
+  input.text-field {
+    width: 100%;
+    background: #081310;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    padding: 11px 12px;
+    margin-bottom: 18px;
+  }
+  input.text-field:focus {
+    outline: none;
+    border-color: var(--signal-dim);
+  }
+
+  .cam-wrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 3 / 4;
+    background: #081310;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 14px;
+  }
+  .cam-wrap video, .cam-wrap img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .cam-badge {
+    position: absolute;
+    top: 8px; left: 8px;
+    background: rgba(6,18,12,0.75);
+    border: 1px solid var(--signal-dim);
+    color: var(--signal);
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    padding: 3px 8px;
+    border-radius: 2px;
+  }
+  .thumb-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+  .thumb-row img {
+    width: 64px; height: 64px;
+    object-fit: cover;
+    border-radius: 3px;
+    border: 1px solid var(--signal-dim);
+  }
+  .thumb-row .thumb-label { font-family: var(--mono); font-size: 12px; color: var(--signal); }
 </style>
 </head>
 <body>
@@ -209,20 +282,25 @@
 <script>
 (function () {
   // Paste the Web app URL from your Apps Script deployment here (ends in /exec).
-  // Leave as-is and the page will still work, it just won't save anywhere.
   const SHEET_ENDPOINT = "https://script.google.com/macros/s/AKfycbxyOHOI8fG0qC2Pe8oyFVSlutqzMtD2RxbfKSgX0yw6raZGt97mFoEb8day0pRsamle/exec";
+
   const card = document.getElementById('card');
   const params = new URLSearchParams(window.location.search);
   const isCapture = params.get('checkin') === '1';
+
+  // shared state across the capture flow
+  let stream = null;
+  let photoDataUrl = null;
+  let locationName = '';
 
   function renderGenerator() {
     const shareUrl = window.location.origin + window.location.pathname + '?checkin=1';
     card.innerHTML = `
       <div class="eyebrow"><span class="dot"></span>LOCATION CHECK-IN</div>
-      <h1>Scan to share current location</h1>
+      <h1>Scan to check in</h1>
       <div id="qr-wrap"><div id="qr"></div></div>
       <div class="url-box">${shareUrl}</div>
-      <p class="hint">Whoever scans this sees a clear notice that their location will be recorded, then gives permission on <b>their own phone</b> &mdash; nothing is captured silently.</p>
+      <p class="hint">Whoever scans this sees a clear notice about what's collected, then gives permission on <b>their own phone</b> &mdash; nothing is captured silently.</p>
     `;
     new QRCode(document.getElementById('qr'), {
       text: shareUrl,
@@ -237,13 +315,90 @@
   function renderConsent() {
     card.innerHTML = `
       <div class="eyebrow"><span class="dot"></span>LOCATION CHECK-IN</div>
-      <h1>This will record your location</h1>
-      <p class="hint" style="margin-bottom:20px;">Tapping continue asks your device for your current GPS location, then <b>saves it to a log</b> the organizer of this check-in can see. Only continue if that's OK with you.</p>
+      <h1>This check-in records three things</h1>
+      <ul class="hint-list">
+        <li><b>Your GPS location</b> at the moment you check in</li>
+        <li><b>A selfie</b> taken with your front camera, right here</li>
+        <li><b>The location name</b> you type in yourself</li>
+      </ul>
+      <p class="hint" style="margin-bottom:20px;">All three are saved to a log the organizer of this check-in can see. Only continue if that's OK with you.</p>
       <div class="actions">
-        <button class="btn primary" id="consentBtn">Continue &amp; share location</button>
+        <button class="btn primary" id="consentBtn">Continue</button>
       </div>
     `;
-    document.getElementById('consentBtn').addEventListener('click', beginCapture);
+    document.getElementById('consentBtn').addEventListener('click', renderCaptureForm);
+  }
+
+  function renderCaptureForm() {
+    card.innerHTML = `
+      <div class="eyebrow"><span class="dot"></span>LOCATION CHECK-IN</div>
+      <h1>Take a selfie &amp; name the spot</h1>
+      <div class="cam-wrap" id="camWrap">
+        <span class="cam-badge">LIVE</span>
+        <video id="camVideo" autoplay playsinline muted></video>
+      </div>
+      <div class="actions" style="margin-bottom:18px;">
+        <button class="btn primary" id="captureBtn">Capture selfie</button>
+      </div>
+      <label class="field-label" for="locName">Location name</label>
+      <input class="text-field" id="locName" type="text" placeholder="e.g. Main Street Store, Gate 2" />
+      <div class="actions">
+        <button class="btn primary" id="submitBtn" disabled>Submit check-in</button>
+      </div>
+      <div class="error" id="camError" style="display:none;margin-top:14px;"></div>
+    `;
+
+    const video = document.getElementById('camVideo');
+    const captureBtn = document.getElementById('captureBtn');
+    const submitBtn = document.getElementById('submitBtn');
+    const locInput = document.getElementById('locName');
+    const camError = document.getElementById('camError');
+    const camWrap = document.getElementById('camWrap');
+
+    function updateSubmitState() {
+      submitBtn.disabled = !(photoDataUrl && locInput.value.trim().length > 0);
+    }
+
+    locInput.addEventListener('input', updateSubmitState);
+
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
+      .then(function (s) {
+        stream = s;
+        video.srcObject = stream;
+      })
+      .catch(function () {
+        camError.style.display = 'block';
+        camError.textContent = 'Could not access the camera. Allow camera permission for this site in your browser settings and reload.';
+        captureBtn.disabled = true;
+      });
+
+    captureBtn.addEventListener('click', function () {
+      const canvas = document.createElement('canvas');
+      const size = 480;
+      canvas.width = size;
+      canvas.height = Math.round(size * (video.videoHeight / video.videoWidth || 4 / 3));
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      photoDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+
+      camWrap.innerHTML = `<span class="cam-badge">CAPTURED</span><img src="${photoDataUrl}" alt="Selfie preview" />`;
+      captureBtn.textContent = 'Retake selfie';
+      if (stream) {
+        stream.getTracks().forEach(t => t.stop());
+      }
+      captureBtn.onclick = function () {
+        photoDataUrl = null;
+        renderCaptureForm();
+      };
+      updateSubmitState();
+    });
+
+    submitBtn.addEventListener('click', function () {
+      locationName = locInput.value.trim();
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      renderRequesting();
+      requestLocationAndSubmit();
+    });
   }
 
   function renderRequesting() {
@@ -255,10 +410,19 @@
     `;
   }
 
+  function renderSubmitting() {
+    card.innerHTML = `
+      <div class="eyebrow"><span class="dot"></span>LOCATION CHECK-IN</div>
+      <h1>Saving your check-in</h1>
+      <div class="radar"><div class="sweep"></div><div class="pin"></div></div>
+      <p class="status-line" style="text-align:center;">Uploading photo &amp; details&hellip;</p>
+    `;
+  }
+
   function renderError(message) {
     card.innerHTML = `
       <div class="eyebrow"><span class="dot" style="background:var(--red);box-shadow:0 0 8px var(--red);"></span>LOCATION CHECK-IN</div>
-      <h1>Couldn't get your location</h1>
+      <h1>Something went wrong</h1>
       <div class="error">${message}</div>
       <div class="actions" style="margin-top:16px;">
         <button class="btn primary" onclick="location.reload()">Try again</button>
@@ -270,16 +434,19 @@
     const latStr = lat.toFixed(6);
     const lonStr = lon.toFixed(6);
     const mapsUrl = `https://www.google.com/maps?q=${latStr},${lonStr}`;
-    const shareText = `My current location: ${mapsUrl}`;
     const now = new Date();
 
     let saveNote = 'Location saving is not configured on this page.';
     if (saveState === 'saved') saveNote = 'Saved to the check-in log.';
-    if (saveState === 'failed') saveNote = 'Could not reach the log — location was NOT saved, only shown here.';
+    if (saveState === 'failed') saveNote = 'Could not reach the log — this check-in was NOT saved, only shown here.';
 
     card.innerHTML = `
-      <div class="eyebrow"><span class="dot"></span>LOCATION FOUND</div>
-      <h1>Your current location</h1>
+      <div class="eyebrow"><span class="dot"></span>CHECK-IN COMPLETE</div>
+      <h1>You're checked in</h1>
+      <div class="thumb-row">
+        <img src="${photoDataUrl}" alt="Your selfie" />
+        <div class="thumb-label">${locationName}</div>
+      </div>
       <div class="coords" style="text-align:center;">${latStr}, ${lonStr}</div>
       <div class="meta-grid">
         <div class="meta"><div class="k">Accuracy</div><div class="v">&plusmn; ${Math.round(accuracy)} m</div></div>
@@ -287,50 +454,28 @@
       </div>
       <div class="actions">
         <a class="btn primary" href="${mapsUrl}" target="_blank" rel="noopener">Open in Google Maps</a>
-        <a class="btn" href="https://wa.me/?text=${encodeURIComponent(shareText)}" target="_blank" rel="noopener">Share via WhatsApp</a>
-        <a class="btn" href="sms:?body=${encodeURIComponent(shareText)}">Share via SMS</a>
-        <button class="btn" id="copyBtn">Copy link</button>
       </div>
       <div class="footer-note">${saveNote}</div>
     `;
-    document.getElementById('copyBtn').addEventListener('click', function () {
-      navigator.clipboard.writeText(mapsUrl).then(() => {
-        this.textContent = 'Copied';
-        setTimeout(() => { this.textContent = 'Copy link'; }, 1500);
-      });
-    });
   }
 
-  function saveToSheet(lat, lon, accuracy) {
-    if (!SHEET_ENDPOINT || SHEET_ENDPOINT.indexOf('PASTE_YOUR') === 0) {
-      renderResult(lat, lon, accuracy, 'unconfigured');
-      return;
-    }
-    fetch(SHEET_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight against Apps Script
-      body: JSON.stringify({ lat: lat, lon: lon, accuracy: accuracy })
-    })
-      .then(() => renderResult(lat, lon, accuracy, 'saved'))
-      .catch(() => renderResult(lat, lon, accuracy, 'failed'));
-  }
-
-  function beginCapture() {
-    renderRequesting();
-
+  function requestLocationAndSubmit() {
     if (!('geolocation' in navigator)) {
       renderError('This browser does not support location services.');
       return;
     }
-
     navigator.geolocation.getCurrentPosition(
       function (pos) {
-        saveToSheet(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+        const lat = pos.coords.latitude;
+        const lon = pos.coords.longitude;
+        const accuracy = pos.coords.accuracy;
+        renderSubmitting();
+        submitCheckin(lat, lon, accuracy);
       },
       function (err) {
         let msg = 'Location request failed. Please try again.';
         if (err.code === err.PERMISSION_DENIED) {
-          msg = 'Permission was denied. To share your location, allow location access for this site in your browser settings and reload.';
+          msg = 'Permission was denied. Allow location access for this site in your browser settings and reload.';
         } else if (err.code === err.POSITION_UNAVAILABLE) {
           msg = 'Position unavailable. Make sure GPS/location services are turned on.';
         } else if (err.code === err.TIMEOUT) {
@@ -340,6 +485,26 @@
       },
       { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
     );
+  }
+
+  function submitCheckin(lat, lon, accuracy) {
+    if (!SHEET_ENDPOINT || SHEET_ENDPOINT.indexOf('PASTE_YOUR') === 0) {
+      renderResult(lat, lon, accuracy, 'unconfigured');
+      return;
+    }
+    fetch(SHEET_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight against Apps Script
+      body: JSON.stringify({
+        lat: lat,
+        lon: lon,
+        accuracy: accuracy,
+        locationName: locationName,
+        photo: photoDataUrl
+      })
+    })
+      .then(() => renderResult(lat, lon, accuracy, 'saved'))
+      .catch(() => renderResult(lat, lon, accuracy, 'failed'));
   }
 
   if (!isCapture) {
