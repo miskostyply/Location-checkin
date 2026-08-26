@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Live Location Check-in</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --bg: #0a1210;
+    --bg-panel: #0f1c19;
+    --line: #1c332d;
+    --signal: #39ff9a;
+    --signal-dim: #1f8a5c;
+    --text: #d9f2e8;
+    --text-dim: #6f9488;
+    --amber: #ffb84d;
+    --red: #ff5c5c;
+    --mono: 'SF Mono', 'JetBrains Mono', 'Courier New', monospace;
+    --sans: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    background-image:
+      radial-gradient(circle at 50% 0%, rgba(57,255,154,0.06), transparent 60%),
+      linear-gradient(var(--line) 1px, transparent 1px),
+      linear-gradient(90deg, var(--line) 1px, transparent 1px);
+    background-size: auto, 34px 34px, 34px 34px;
+    color: var(--text);
+    font-family: var(--sans);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+  }
+  .card {
+    width: 100%;
+    max-width: 420px;
+    background: var(--bg-panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 28px 26px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+  .card::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--signal), transparent);
+    opacity: 0.7;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    color: var(--signal-dim);
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+  }
+  .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--signal);
+    box-shadow: 0 0 8px var(--signal);
+    animation: pulse 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.25} }
+  h1 {
+    font-size: 20px;
+    margin: 0 0 18px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  /* ---- Generator view ---- */
+  #qr-wrap {
+    background: #fff;
+    padding: 16px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 18px;
+  }
+  .url-box {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text-dim);
+    background: #081310;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 10px 12px;
+    word-break: break-all;
+    margin-bottom: 14px;
+  }
+  .hint {
+    font-size: 13px;
+    color: var(--text-dim);
+    line-height: 1.55;
+    margin: 0;
+  }
+  .hint b { color: var(--amber); font-weight: 600; }
+
+  /* ---- Capture view ---- */
+  .radar {
+    width: 120px; height: 120px;
+    margin: 6px auto 20px;
+    border-radius: 50%;
+    border: 1px solid var(--signal-dim);
+    position: relative;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .radar::before, .radar::after {
+    content: "";
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid var(--line);
+  }
+  .radar::before { width: 78px; height: 78px; }
+  .radar::after { width: 40px; height: 40px; }
+  .sweep {
+    position: absolute;
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg, transparent 0deg, rgba(57,255,154,0.35) 30deg, transparent 60deg);
+    animation: spin 1.6s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .pin { position: relative; z-index: 2; width: 8px; height: 8px; border-radius: 50%; background: var(--signal); box-shadow: 0 0 10px var(--signal); }
+
+  .status-line {
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-bottom: 4px;
+  }
+  .coords {
+    font-family: var(--mono);
+    font-size: 26px;
+    text-align: center;
+    color: var(--signal);
+    margin: 6px 0 18px;
+    letter-spacing: -0.01em;
+  }
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .meta {
+    background: #081310;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 10px 12px;
+  }
+  .meta .k { font-family: var(--mono); font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.08em; }
+  .meta .v { font-family: var(--mono); font-size: 14px; color: var(--text); margin-top: 3px; }
+
+  .actions { display: flex; flex-direction: column; gap: 10px; }
+  .btn {
+    display: block;
+    text-align: center;
+    font-family: var(--sans);
+    font-size: 14px;
+    font-weight: 600;
+    padding: 12px 16px;
+    border-radius: 3px;
+    border: 1px solid var(--signal-dim);
+    background: transparent;
+    color: var(--signal);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .btn:hover { background: rgba(57,255,154,0.08); }
+  .btn.primary { background: var(--signal); color: #06120c; }
+  .btn.primary:hover { background: #4dffab; }
+
+  .error {
+    background: rgba(255,92,92,0.08);
+    border: 1px solid rgba(255,92,92,0.35);
+    color: #ffb0b0;
+    font-size: 13px;
+    line-height: 1.5;
+    padding: 12px 14px;
+    border-radius: 3px;
+  }
+  .footer-note {
+    margin-top: 18px;
+    font-size: 11px;
+    color: var(--text-dim);
+    text-align: center;
+    font-family: var(--mono);
+  }
+</style>
+</head>
+<body>
+  <div class="card" id="card"></div>
+
+<script>
+(function () {
+  // Paste the Web app URL from your Apps Script deployment here (ends in /exec).
+  // Leave as-is and the page will still work, it just won't save anywhere.
+  const SHEET_ENDPOINT = "https://script.google.com/a/macros/kostyply.com/s/AKfycbxyOHOI8fG0qC2Pe8oyFVSlutqzMtD2RxbfKSgX0yw6raZGt97mFoEb8day0pRsamle/exec";
+
+  const card = document.getElementById('card');
+  const params = new URLSearchParams(window.location.search);
+  const isCapture = params.get('checkin') === '1';
+
+  function renderGenerator() {
+    const shareUrl = window.location.origin + window.location.pathname + '?checkin=1';
+    card.innerHTML = `
+      <div class="eyebrow"><span class="dot"></span>LOCATION CHECK-IN</div>
+      <h1>Scan to share current location</h1>
+      <div id="qr-wrap"><div id="qr"></div></div>
+      <div class="url-box">${shareUrl}</div>
+      <p class="hint">Whoever scans this sees a clear notice that their location will be recorded, then gives permission on <b>their own phone</b> &mdash; nothing is captured silently.</p>
+    `;
+    new QRCode(document.getElementById('qr'), {
+      text: shareUrl,
+      width: 200,
+      height: 200,
+      colorDark: '#06120c',
+      colorLight: '#ffffff',
+      correctLevel: QRCode.CorrectLevel.M
+    });
+  }
+
+  function renderConsent() {
+    card.innerHTML = `
+      <div class="eyebrow"><span class="dot"></span>LOCATION CHECK-IN</div>
+      <h1>This will record your location</h1>
+      <p class="hint" style="margin-bottom:20px;">Tapping continue asks your device for your current GPS location, then <b>saves it to a log</b> the organizer of this check-in can see. Only continue if that's OK with you.</p>
+      <div class="actions">
+        <button class="btn primary" id="consentBtn">Continue &amp; share location</button>
+      </div>
+    `;
+    document.getElementById('consentBtn').addEventListener('click', beginCapture);
+  }
+
+  function renderRequesting() {
+    card.innerHTML = `
+      <div class="eyebrow"><span class="dot"></span>LOCATION CHECK-IN</div>
+      <h1>Getting your location</h1>
+      <div class="radar"><div class="sweep"></div><div class="pin"></div></div>
+      <p class="status-line" style="text-align:center;">Waiting for permission &amp; GPS fix&hellip;</p>
+    `;
+  }
+
+  function renderError(message) {
+    card.innerHTML = `
+      <div class="eyebrow"><span class="dot" style="background:var(--red);box-shadow:0 0 8px var(--red);"></span>LOCATION CHECK-IN</div>
+      <h1>Couldn't get your location</h1>
+      <div class="error">${message}</div>
+      <div class="actions" style="margin-top:16px;">
+        <button class="btn primary" onclick="location.reload()">Try again</button>
+      </div>
+    `;
+  }
+
+  function renderResult(lat, lon, accuracy, saveState) {
+    const latStr = lat.toFixed(6);
+    const lonStr = lon.toFixed(6);
+    const mapsUrl = `https://www.google.com/maps?q=${latStr},${lonStr}`;
+    const shareText = `My current location: ${mapsUrl}`;
+    const now = new Date();
+
+    let saveNote = 'Location saving is not configured on this page.';
+    if (saveState === 'saved') saveNote = 'Saved to the check-in log.';
+    if (saveState === 'failed') saveNote = 'Could not reach the log — location was NOT saved, only shown here.';
+
+    card.innerHTML = `
+      <div class="eyebrow"><span class="dot"></span>LOCATION FOUND</div>
+      <h1>Your current location</h1>
+      <div class="coords" style="text-align:center;">${latStr}, ${lonStr}</div>
+      <div class="meta-grid">
+        <div class="meta"><div class="k">Accuracy</div><div class="v">&plusmn; ${Math.round(accuracy)} m</div></div>
+        <div class="meta"><div class="k">Time</div><div class="v">${now.toLocaleTimeString()}</div></div>
+      </div>
+      <div class="actions">
+        <a class="btn primary" href="${mapsUrl}" target="_blank" rel="noopener">Open in Google Maps</a>
+        <a class="btn" href="https://wa.me/?text=${encodeURIComponent(shareText)}" target="_blank" rel="noopener">Share via WhatsApp</a>
+        <a class="btn" href="sms:?body=${encodeURIComponent(shareText)}">Share via SMS</a>
+        <button class="btn" id="copyBtn">Copy link</button>
+      </div>
+      <div class="footer-note">${saveNote}</div>
+    `;
+    document.getElementById('copyBtn').addEventListener('click', function () {
+      navigator.clipboard.writeText(mapsUrl).then(() => {
+        this.textContent = 'Copied';
+        setTimeout(() => { this.textContent = 'Copy link'; }, 1500);
+      });
+    });
+  }
+
+  function saveToSheet(lat, lon, accuracy) {
+    if (!SHEET_ENDPOINT || SHEET_ENDPOINT.indexOf('PASTE_YOUR') === 0) {
+      renderResult(lat, lon, accuracy, 'unconfigured');
+      return;
+    }
+    fetch(SHEET_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' }, // avoids CORS preflight against Apps Script
+      body: JSON.stringify({ lat: lat, lon: lon, accuracy: accuracy })
+    })
+      .then(() => renderResult(lat, lon, accuracy, 'saved'))
+      .catch(() => renderResult(lat, lon, accuracy, 'failed'));
+  }
+
+  function beginCapture() {
+    renderRequesting();
+
+    if (!('geolocation' in navigator)) {
+      renderError('This browser does not support location services.');
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      function (pos) {
+        saveToSheet(pos.coords.latitude, pos.coords.longitude, pos.coords.accuracy);
+      },
+      function (err) {
+        let msg = 'Location request failed. Please try again.';
+        if (err.code === err.PERMISSION_DENIED) {
+          msg = 'Permission was denied. To share your location, allow location access for this site in your browser settings and reload.';
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          msg = 'Position unavailable. Make sure GPS/location services are turned on.';
+        } else if (err.code === err.TIMEOUT) {
+          msg = 'The request timed out. Check your connection and try again.';
+        }
+        renderError(msg);
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    );
+  }
+
+  if (!isCapture) {
+    renderGenerator();
+    return;
+  }
+
+  renderConsent();
+})();
+</script>
+</body>
+</html>
