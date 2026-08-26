@@ -210,8 +210,7 @@
 (function () {
   // Paste the Web app URL from your Apps Script deployment here (ends in /exec).
   // Leave as-is and the page will still work, it just won't save anywhere.
-  const SHEET_ENDPOINT = "https://script.google.com/a/macros/kostyply.com/s/AKfycbxyOHOI8fG0qC2Pe8oyFVSlutqzMtD2RxbfKSgX0yw6raZGt97mFoEb8day0pRsamle/exec";
-
+  const SHEET_ENDPOINT = "https://script.google.com/macros/s/AKfycbxyOHOI8fG0qC2Pe8oyFVSlutqzMtD2RxbfKSgX0yw6raZGt97mFoEb8day0pRsamle/exec";
   const card = document.getElementById('card');
   const params = new URLSearchParams(window.location.search);
   const isCapture = params.get('checkin') === '1';
