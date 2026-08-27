@@ -237,6 +237,17 @@
     outline: none;
     border-color: var(--signal-dim);
   }
+  select.text-field {
+    -webkit-appearance: none;
+    appearance: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6'><polygon points='0,0 10,0 5,6' fill='%236f9488'/></svg>");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+  }
+  select.text-field:focus {
+    outline: none;
+    border-color: var(--signal-dim);
+  }
 
   .cam-wrap {
     position: relative;
@@ -292,6 +303,7 @@
   let stream = null;
   let photoDataUrl = null;
   let locationName = '';
+  let personName = '';
 
   function renderGenerator() {
     const shareUrl = window.location.origin + window.location.pathname + '?checkin=1';
@@ -319,7 +331,7 @@
       <ul class="hint-list">
         <li><b>Your GPS location</b> at the moment you check in</li>
         <li><b>A selfie</b> taken with your front camera, right here</li>
-        <li><b>The location name</b> you type in yourself</li>
+        <li><b>The location</b> you select, and your name</li>
       </ul>
       <p class="hint" style="margin-bottom:20px;">All three are saved to a log the organizer of this check-in can see. Only continue if that's OK with you.</p>
       <div class="actions">
@@ -340,8 +352,17 @@
       <div class="actions" style="margin-bottom:18px;">
         <button class="btn primary" id="captureBtn">Capture selfie</button>
       </div>
-      <label class="field-label" for="locName">Location name</label>
-      <input class="text-field" id="locName" type="text" placeholder="e.g. Main Street Store, Gate 2" />
+      <label class="field-label" for="personName">Name</label>
+      <input class="text-field" id="personName" type="text" placeholder="Your name" />
+
+      <label class="field-label" for="locName">Location</label>
+      <select class="text-field" id="locName">
+        <option value="" disabled selected>Select location</option>
+        <option value="Paras">Paras</option>
+        <option value="Zahir">Zahir</option>
+        <option value="GPI">GPI</option>
+      </select>
+
       <div class="actions">
         <button class="btn primary" id="submitBtn" disabled>Submit check-in</button>
       </div>
@@ -351,15 +372,16 @@
     const video = document.getElementById('camVideo');
     const captureBtn = document.getElementById('captureBtn');
     const submitBtn = document.getElementById('submitBtn');
-    const locInput = document.getElementById('locName');
+    const nameInput = document.getElementById('personName');
+    const locSelect = document.getElementById('locName');
     const camError = document.getElementById('camError');
     const camWrap = document.getElementById('camWrap');
 
     function updateSubmitState() {
-      submitBtn.disabled = !(photoDataUrl && locInput.value.trim().length > 0);
+      submitBtn.disabled = !(photoDataUrl && locSelect.value.length > 0);
     }
 
-    locInput.addEventListener('input', updateSubmitState);
+    locSelect.addEventListener('change', updateSubmitState);
 
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
       .then(function (s) {
@@ -394,7 +416,8 @@
     });
 
     submitBtn.addEventListener('click', function () {
-      locationName = locInput.value.trim();
+      locationName = locSelect.value;
+      personName = nameInput.value.trim();
       if (stream) stream.getTracks().forEach(t => t.stop());
       renderRequesting();
       requestLocationAndSubmit();
@@ -500,6 +523,7 @@
         lon: lon,
         accuracy: accuracy,
         locationName: locationName,
+        personName: personName,
         photo: photoDataUrl
       })
     })
