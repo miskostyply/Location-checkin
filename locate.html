@@ -319,10 +319,7 @@
   }
 
   function nextWindowText(now) {
-    const minute = now.getMinutes();
-    let targetHour = now.getHours();
-    if (minute > 5) targetHour = (targetHour + 1) % 24;
-    const hh = String(targetHour).padStart(2, '0');
+    const hh = String(now.getHours()).padStart(2, '0');
     return hh + ':55';
   }
 
