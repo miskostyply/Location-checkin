@@ -305,6 +305,41 @@
   let locationName = '';
   let personName = '';
 
+  function isWithinSlot(now) {
+    const minute = now.getMinutes();
+    return minute >= 55 || minute <= 5;
+  }
+
+  function currentSlotLabel(now) {
+    const minute = now.getMinutes();
+    let slotHour = now.getHours();
+    if (minute >= 55) slotHour = (slotHour + 1) % 24;
+    const hh = String(slotHour).padStart(2, '0');
+    return hh + ':00';
+  }
+
+  function nextWindowText(now) {
+    const minute = now.getMinutes();
+    let targetHour = now.getHours();
+    if (minute > 5) targetHour = (targetHour + 1) % 24;
+    const hh = String(targetHour).padStart(2, '0');
+    return hh + ':55';
+  }
+
+  function renderOutsideWindow() {
+    const now = new Date();
+    card.innerHTML = `
+      <div class="eyebrow"><span class="dot" style="background:var(--amber);box-shadow:0 0 8px var(--amber);"></span>LOCATION CHECK-IN</div>
+      <h1>Not check-in time</h1>
+      <p class="hint" style="margin-bottom:18px;">Check-ins are only accepted from :55 to :05 each hour. Current time: <b>${now.toLocaleTimeString()}</b>.</p>
+      <div class="meta full" style="margin-bottom:6px;">
+        <div class="k">Next window opens</div>
+        <div class="v">${nextWindowText(now)}</div>
+      </div>
+      <p class="footer-note" style="margin-top:18px;">Come back when the window opens \u2014 this page cannot be used outside your check-in time.</p>
+    `;
+  }
+
   function renderGenerator() {
     const shareUrl = window.location.origin + window.location.pathname + '?checkin=1';
     card.innerHTML = `
@@ -327,13 +362,13 @@
   function renderConsent() {
     card.innerHTML = `
       <div class="eyebrow"><span class="dot"></span>LOCATION CHECK-IN</div>
-      <h1>This check-in records three things</h1>
+      <h1>Hourly check-in \u2014 this records:</h1>
       <ul class="hint-list">
         <li><b>Your GPS location</b> at the moment you check in</li>
         <li><b>A selfie</b> taken with your front camera, right here</li>
         <li><b>The location</b> you select, and your name</li>
       </ul>
-      <p class="hint" style="margin-bottom:20px;">All three are saved to a log the organizer of this check-in can see. Only continue if that's OK with you.</p>
+      <p class="hint" style="margin-bottom:20px;">This check-in repeats every hour, including night shift. All entries are saved to a log your employer can see. Only continue if that's OK with you.</p>
       <div class="actions">
         <button class="btn primary" id="consentBtn">Continue</button>
       </div>
@@ -416,6 +451,11 @@
     });
 
     submitBtn.addEventListener('click', function () {
+      if (!isWithinSlot(new Date())) {
+        if (stream) stream.getTracks().forEach(t => t.stop());
+        renderOutsideWindow();
+        return;
+      }
       locationName = locSelect.value;
       personName = nameInput.value.trim();
       if (stream) stream.getTracks().forEach(t => t.stop());
@@ -524,6 +564,7 @@
         accuracy: accuracy,
         locationName: locationName,
         personName: personName,
+        slotLabel: currentSlotLabel(new Date()),
         photo: photoDataUrl
       })
     })
@@ -533,6 +574,11 @@
 
   if (!isCapture) {
     renderGenerator();
+    return;
+  }
+
+  if (!isWithinSlot(new Date())) {
+    renderOutsideWindow();
     return;
   }
 
