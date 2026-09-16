@@ -410,10 +410,11 @@
     const camWrap = document.getElementById('camWrap');
 
     function updateSubmitState() {
-      submitBtn.disabled = !(photoDataUrl && locSelect.value.length > 0);
+      submitBtn.disabled = !(photoDataUrl && locSelect.value.length > 0 && nameInput.value.trim().length > 0);
     }
 
     locSelect.addEventListener('change', updateSubmitState);
+    nameInput.addEventListener('input', updateSubmitState);
 
     navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false })
       .then(function (s) {
